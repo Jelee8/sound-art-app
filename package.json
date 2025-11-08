@@ -4,11 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm i && next build && next export",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@spectrum-web-components/color-wheel": "^1.10.0",
+    "@spectrum-web-components/styles": "^1.10.0",
     "next": "16.0.1",
     "p5": "^2.0.5",
     "react": "19.2.0",

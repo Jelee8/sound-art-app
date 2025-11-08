@@ -1,0 +1,3 @@
+- [x] Create app/api/drawing/route.js: GET handler to list .json files in public/drawings/
+- [x] Create app/api/gallery/route.js: GET handler to list .json files in public/drawings/
+- [x] Edit app/api/gallery/[id]/route.js: Change "uploads" to "drawings" in filePath

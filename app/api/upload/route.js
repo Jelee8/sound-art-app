@@ -1,26 +1,24 @@
-import { writeFile } from "fs/promises";
+// app/api/upload/route.js
+import { promises as fs } from "fs";
 import path from "path";
 
 export async function POST(req) {
-  const formData = await req.formData();
-  const file = formData.get("file");
+  try {
+    const body = await req.json();
+    const timestamp = Date.now();
+    const filePath = path.join(process.cwd(), "public", "drawings", `drawing-${timestamp}.json`);
 
-  if (!file) return new Response("No file uploaded", { status: 400 });
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, JSON.stringify(body, null, 2));
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  // ✅ Unique filename each time
-  const timestamp = Date.now();
-  const random = Math.floor(Math.random() * 1e6);
-  const filename = `drawing-${timestamp}-${random}.png`;
-
-  const uploadDir = path.join(process.cwd(), "public", "uploads");
-  const filePath = path.join(uploadDir, filename);
-
-  await writeFile(filePath, buffer);
-
-  return new Response(
-    JSON.stringify({ success: true, path: `/uploads/${filename}` }),
-    { headers: { "Content-Type": "application/json" } }
-  );
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("Error saving drawing:", err);
+    return new Response(JSON.stringify({ error: err.message }), {
+      headers: { "Content-Type": "application/json" },
+      status: 500,
+    });
+  }
 }
