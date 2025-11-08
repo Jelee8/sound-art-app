@@ -13,8 +13,8 @@ export default function DrawPage() {
   const [drawings, setDrawings] = useState([]);
   const [selectedFile, setSelectedFile] = useState("");
 
-  let strokes = [];
-  let undos = [];
+  const strokesRef = useRef([]);
+  const undosRef = useRef([]);
 
   // Ref to store the p5 instance
   const p5Ref = useRef(null);
@@ -44,6 +44,17 @@ export default function DrawPage() {
       p.background(255);
     };
 
+    // Force redraw from the authoritative strokesRef
+    p.redrawFromStrokes = () => {
+      p.background(255);
+      strokesRef.current.forEach((strokeGroup) => {
+        strokeGroup.forEach((stroke) => {
+          p.stroke(stroke.color);
+          p.strokeWeight(stroke.size);
+          p.line(stroke.x1, stroke.y1, stroke.x2, stroke.y2);
+        });
+      });
+    };
     p.draw = () => {};
 
     p.mouseDragged = () => {
@@ -56,7 +67,11 @@ export default function DrawPage() {
         color: color,
         size: size
       };
-      strokes[strokes.length - 1].push(stroke);
+      // Ensure there's a current stroke group to push into
+      if (strokesRef.current.length === 0) {
+        strokesRef.current.push([]);
+      }
+      strokesRef.current[strokesRef.current.length - 1].push(stroke);
 
       p.stroke(color);
       p.strokeWeight(size);
@@ -65,7 +80,9 @@ export default function DrawPage() {
     };
 
     p.mousePressed = async () => {
-      strokes.push([]);
+      // Starting a new stroke group. Clear redo stack because new action invalidates redo history.
+      undosRef.current = [];
+      strokesRef.current.push([]);
       drawing = true;
     }
 
@@ -79,7 +96,7 @@ export default function DrawPage() {
         const res = await fetch("/api/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ strokes, filename }),
+          body: JSON.stringify({ strokes: strokesRef.current, filename }),
         });
         if (res.ok) {
           alert("Drawing saved!");
@@ -90,32 +107,10 @@ export default function DrawPage() {
         }
       }
       else if (p.key === "u"){
-        let undo = strokes.pop();
-        if(undo !== undefined){
-          undos.push(undo);
-          // Redraw entire canvas
-          p.background(255);
-          strokes.forEach((strokeGroup) => {
-            strokeGroup.forEach((stroke) => {
-              p.stroke(stroke.color);
-              p.strokeWeight(stroke.size);
-              p.line(stroke.x1, stroke.y1, stroke.x2, stroke.y2);
-            });
-          });
-        }
+        p.undo(strokesRef.current, undosRef.current);
       }
       else if (p.key === "r"){
-        let redo = undos.pop();
-        if(redo !== undefined){
-          // Add back the stroke group
-          strokes.push(redo);
-          // Draw the entire stroke group
-          redo.forEach((stroke) => {
-            p.stroke(stroke.color);
-            p.strokeWeight(stroke.size);
-            p.line(stroke.x1, stroke.y1, stroke.x2, stroke.y2);
-          });
-        }
+        p.redo(strokesRef.current, undosRef.current);
       }
     };
 
@@ -138,7 +133,7 @@ export default function DrawPage() {
           });
         }
 
-        strokes = data.strokes; // Keep editable
+        strokesRef.current = data.strokes; // Keep editable
       } catch (err) {
         console.error(err);
         alert("Failed to load drawing.");
@@ -147,6 +142,7 @@ export default function DrawPage() {
 
     p.windowResized = () => {
       p.resizeCanvas(window.innerWidth, window.innerHeight);
+      p.background(255);
     };
 
     // Methods to update brush dynamically
@@ -154,6 +150,40 @@ export default function DrawPage() {
       color = newColor;
       size = newSize;
     };
+
+    p.undo = (strokes, undos) => {
+      const before = strokes.length;
+      const beforeUndos = undos.length;
+      console.log('[p.undo] before:', before, 'undos:', beforeUndos);
+      let undo = strokes.pop();
+      if (undo !== undefined) {
+        undos.push(undo);
+        // Redraw entire canvas
+        p.background(255);
+        p.redrawFromStrokes();
+      } else {
+        console.log('[p.undo] nothing to undo');
+      }
+      console.log('[p.undo] after:', strokes.length, 'undos:', undos.length);
+    }
+
+    p.redo = (strokes, undos) => {
+      console.log('[p.redo] before strokes:', strokes.length, 'undos:', undos.length);
+      let redo = undos.pop();
+      if (redo !== undefined) {
+        // Add back the stroke group
+        strokes.push(redo);
+        // Draw the entire stroke group
+        redo.forEach((stroke) => {
+          p.stroke(stroke.color);
+          p.strokeWeight(stroke.size);
+          p.line(stroke.x1, stroke.y1, stroke.x2, stroke.y2);
+        });
+      } else {
+        console.log('[p.redo] nothing to redo');
+      }
+      console.log('[p.redo] after strokes:', strokes.length, 'undos:', undos.length);
+    }
 
     p5Ref.current = p; // save instance
   }, []);
@@ -168,6 +198,20 @@ export default function DrawPage() {
     setBrushSize(size);
     if (p5Ref.current) p5Ref.current.setBrush(brushColor, size);
   };
+
+  const handleUndo = () => {
+    console.log('[handleUndo] called');
+    if (p5Ref.current) {
+      p5Ref.current.undo(strokesRef.current, undosRef.current);
+    }
+  }
+
+  const handleRedo = () => {
+    console.log('[handleRedo] called');
+    if (p5Ref.current) {
+      p5Ref.current.redo(strokesRef.current, undosRef.current);
+    }
+  }
 
   async function handleLoad() {
     if(p5Ref.current && selectedFile){
@@ -207,12 +251,40 @@ export default function DrawPage() {
             />
           ))}
           </div>
+          {/* Undo/Redo */}
+          <div className="w-full flex flex-row items-center justify-center">
+            <button
+              style={{
+                borderRadius: "20%",
+                background: "white",
+                color: "black",
+                padding: "5px"
+              }}
+              name="undo"
+              onClick={() => {
+                handleUndo()
+              }}
+            >Undo</button>
+            <button
+            style={{
+                borderRadius: "20%",
+                background: "white",
+                color: "black",
+                padding: "5px"
+              }}
+              name="redo"
+              onClick={() => {
+                handleRedo()
+              }}
+            >Redo</button>
+          </div>
           {/* Clear Button */}
           <button
-            style={{ padding: "5px 10px", marginLeft: 20 }}
+            style={{ padding: "5px 10px", marginLeft: 20, background: "white", color: "black"}}
             onClick={() => {
               if (p5Ref.current) p5Ref.current.background(255);
-              strokes = [];
+              strokesRef.current = [];
+              undosRef.current = [];
             }}
           >
             Clear
@@ -238,9 +310,9 @@ export default function DrawPage() {
             Load Drawing
           </button>
         </div>
-        <Link href="/gallery" className="mt-4 underline text-blue-600">
+        {/* <Link href="/gallery" className="mt-4 underline text-blue-600">
           View Gallery →
-        </Link>
+        </Link> */}
       </div>
 
       {/* Drawing Canvas */}

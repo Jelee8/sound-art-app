@@ -13,11 +13,11 @@ export default function P5Sketch({ sketch }) {
     import("p5").then(({ default: P5 }) => {
       if (!mounted) return;
 
-      // ✅ This returns the actual p5 instance
+      //This returns the actual p5 instance
       p5InstanceRef.current = new P5(sketch, containerRef.current);
     });
 
-    // ✅ Cleanup on unmount
+    //Cleanup on unmount
     return () => {
       mounted = false;
       if (p5InstanceRef.current && p5InstanceRef.current.remove) {
