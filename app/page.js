@@ -175,70 +175,24 @@ export default function DrawPage() {
     }
   }
 
-  //undo
-  const undo = () => {
-    if(!p5InstanceRef.current || undoStack.current.length === 0){
-      return;
-    }
-    const p = p5InstanceRef.current;
-    const lastState = undoStack.current.pop();
-    redoStack.current.push(p.canvas.toDataURL());
-    const prevState = undoStack.current[undoStack.current.length - 1];
-    const img = new Image();
-    img.src = prevState;
-    img.onload = () => {
-      p.clear();
-      p.image(img, 0, 0);
-    };
-  };
-
-  //redo
-  const redo = () => {
-    if(!p5InstanceRef.current || redoStack.current.length === 0){
-      return;
-    }
-    const p = p5InstanceRef.current;
-    const redoState = redoStack.current.pop();
-    undoStack.current.push(p.canvas.toDataURL());
-    const prevState = undoStack.current[undoStack.current.length - 1];
-    const img = new Image();
-    img.src = redoState;
-    img.onload = () => {
-      p.clear();
-      p.image(img, 0, 0);
-    };
-  }
-
   return (
     <div className="flex flex-row">
-      <ColorWheel brushColor={brushColor} onColorChange={handleColorChange} />
       {/* Toolbar */}
       <div className="flex flex-col">
+        <ColorWheel onColorChange={handleColorChange} />
         <div
           style={{
             height: "auto",
             display: "flex",
+            flexDirection: "column",
             alignItems: "center",
             gap: 20,
             padding: 10,
             background: "#000",
           }}
         >
-          {/* Colors */}
-          {["#000000", "#FF0000", "#00FF00", "#0000FF"].map((c) => (
-            <button
-              key={c}
-              style={{
-                background: c,
-                width: 40,
-                height: 40,
-                border: brushColor === c ? "3px solid #555" : "1px solid #999",
-              }}
-              onClick={() => handleColorChange(c)}
-            />
-          ))}
-
-          {/* Brush Sizes */}
+          <div className="flex flex-row items-center justify-evenly w-full">
+            {/* Brush Sizes */}
           {[5, 10, 20, 40].map((s) => (
             <button
               key={s}
@@ -252,7 +206,7 @@ export default function DrawPage() {
               onClick={() => handleSizeChange(s)}
             />
           ))}
-
+          </div>
           {/* Clear Button */}
           <button
             style={{ padding: "5px 10px", marginLeft: 20 }}
