@@ -1,19 +1,28 @@
 "use client";
 
-import { useRef, useEffect } from "react";
-import p5 from "p5";
+import { useEffect, useRef } from "react";
 
 export default function P5Sketch({ sketch }) {
-  const containerRef = useRef();
+  const containerRef = useRef(null);
+  const p5InstanceRef = useRef(null); // store real instance here
 
   useEffect(() => {
-    let myP5;
-    if (containerRef.current) {
-      myP5 = new p5(sketch, containerRef.current);
-    }
+    let mounted = true;
+
+    // Dynamically import p5 only on client
+    import("p5").then(({ default: P5 }) => {
+      if (!mounted) return;
+
+      // ✅ This returns the actual p5 instance
+      p5InstanceRef.current = new P5(sketch, containerRef.current);
+    });
+
+    // ✅ Cleanup on unmount
     return () => {
-      // Cleanup on unmount
-      if (myP5) myP5.remove();
+      mounted = false;
+      if (p5InstanceRef.current && p5InstanceRef.current.remove) {
+        p5InstanceRef.current.remove();
+      }
     };
   }, [sketch]);
 
