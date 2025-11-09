@@ -1,26 +1,21 @@
-// components/ColorWheel.js
 "use client";
 import { useRef, useEffect, useState } from "react";
 
 export default function ColorWheel({ onColorChange }) {
-  const containerRef = useRef(null);
   const canvasRef = useRef(null);
-
+  const [selectedHue, setSelectedHue] = useState(0);
+  const [lightness, setLightness] = useState(0.5);
   const [selectedColor, setSelectedColor] = useState("#ff0000");
-  const [markerPos, setMarkerPos] = useState(null); // { x: cssPx, y: cssPx } or null
+  const [markerPos, setMarkerPos] = useState(null);
 
-  const CSS_SIZE = 300;      // visible size in CSS pixels
-  const INNER_RADIUS_CSS = 80; // hollow inner radius in CSS pixels
+  const CSS_SIZE = 300;
+  const INNER_RADIUS_CSS = 80;
 
-  // Draw wheel once (or when size changes)
+  // Draw color wheel (rainbow ring)
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-
     const dpr = window.devicePixelRatio || 1;
     const backingSize = Math.floor(CSS_SIZE * dpr);
-
-    // Set backing store size for crisp drawing, then style to CSS size
     canvas.width = backingSize;
     canvas.height = backingSize;
     canvas.style.width = `${CSS_SIZE}px`;
@@ -28,9 +23,7 @@ export default function ColorWheel({ onColorChange }) {
 
     const ctx = canvas.getContext("2d");
     const outerRadius = backingSize / 2;
-    const innerRadius = INNER_RADIUS_CSS * dpr; // convert inner radius to backing pixels
-
-    // Create image data once for speed
+    const innerRadius = INNER_RADIUS_CSS * dpr;
     const img = ctx.createImageData(backingSize, backingSize);
     const data = img.data;
 
@@ -39,98 +32,64 @@ export default function ColorWheel({ onColorChange }) {
         const dx = i - outerRadius;
         const dy = j - outerRadius;
         const dist = Math.sqrt(dx * dx + dy * dy);
-
         if (dist <= outerRadius && dist >= innerRadius) {
-          // angle in degrees [0,360)
           const angle = Math.atan2(dy, dx) * (180 / Math.PI) + 180;
-          const hue = angle / 360;
-          const sat = 1; // full saturation on the ring
-          const light = 0.5;
-
-          const [r, g, b] = hslToRgb(hue, sat, light);
+          const [r, g, b] = hslToRgb(angle / 360, 1, 0.5);
           const idx = (j * backingSize + i) * 4;
           data[idx] = r;
           data[idx + 1] = g;
           data[idx + 2] = b;
           data[idx + 3] = 255;
-        } else {
-          // transparent / background
-          const idx = (j * backingSize + i) * 4;
-          data[idx] = 0;
-          data[idx + 1] = 0;
-          data[idx + 2] = 0;
-          data[idx + 3] = 0;
         }
       }
     }
 
     ctx.putImageData(img, 0, 0);
-  }, []); // empty deps -> draw once
+  }, []);
 
-  // Handle click (and compute marker pos & hex color)
   const handleClick = (e) => {
     const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect(); // CSS pixels
-    const cssX = e.clientX - rect.left; // CSS px within canvas (for marker)
+    const rect = canvas.getBoundingClientRect();
+    const cssX = e.clientX - rect.left;
     const cssY = e.clientY - rect.top;
 
     const dpr = window.devicePixelRatio || 1;
-    // convert to backing pixels for color reading
-    const x = Math.round(cssX * dpr);
-    const y = Math.round(cssY * dpr);
-
-    const backingSize = canvas.width; // already set
-    const center = backingSize / 2;
-    const dx = x - center;
-    const dy = y - center;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const x = (cssX - CSS_SIZE / 2) * dpr;
+    const y = (cssY - CSS_SIZE / 2) * dpr;
+    const dist = Math.sqrt(x * x + y * y);
     const innerRadius = INNER_RADIUS_CSS * dpr;
-    const outerRadius = backingSize / 2;
+    const outerRadius = (CSS_SIZE / 2) * dpr;
 
-    if (dist < innerRadius || dist > outerRadius) {
-      // click outside ring/hole -> ignore
-      return;
-    }
+    if (dist < innerRadius || dist > outerRadius) return;
 
-    const angle = Math.atan2(dy, dx) * (180 / Math.PI) + 180; // 0-360
-    const hue = angle / 360;
-    const sat = 1;
-    const light = 0.5;
-
-    const [r, g, b] = hslToRgb(hue, sat, light);
+    const angle = Math.atan2(y, x) * (180 / Math.PI) + 180;
+    setSelectedHue(angle);
+    const [r, g, b] = hslToRgb(angle / 360, 1, lightness);
     const hex = rgbToHex(r, g, b);
-
     setSelectedColor(hex);
     onColorChange?.(hex);
-
-    // Marker position should be placed using CSS pixels (so set cssX / cssY)
     setMarkerPos({ x: cssX, y: cssY });
+  };
+
+  const handleLightnessChange = (e) => {
+    const newL = parseFloat(e.target.value);
+    setLightness(newL);
+    const [r, g, b] = hslToRgb(selectedHue / 360, 1, newL);
+    const hex = rgbToHex(r, g, b);
+    setSelectedColor(hex);
+    onColorChange?.(hex);
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-      <div
-        ref={containerRef}
-        style={{
-          position: "relative",
-          width: CSS_SIZE,
-          height: CSS_SIZE,
-          userSelect: "none",
-        }}
-      >
+      <div style={{ position: "relative", width: CSS_SIZE, height: CSS_SIZE }}>
         <canvas
           ref={canvasRef}
           onClick={handleClick}
-          style={{
-            display: "block",
-            borderRadius: "50%",
-            cursor: "crosshair",
-          }}
+          style={{ display: "block", borderRadius: "50%", cursor: "crosshair" }}
         />
-        {/* Marker layered on top */}
         {markerPos && (
           <div
-            aria-hidden
             style={{
               position: "absolute",
               left: markerPos.x,
@@ -145,7 +104,7 @@ export default function ColorWheel({ onColorChange }) {
                 height: 14,
                 borderRadius: "50%",
                 border: "3px solid white",
-                boxShadow: "0 0 0 1px rgba(0,0,0,0.25)",
+                boxShadow: "0 0 0 1px rgba(0,0,0,0.3)",
                 backgroundColor: selectedColor,
               }}
             />
@@ -153,6 +112,31 @@ export default function ColorWheel({ onColorChange }) {
         )}
       </div>
 
+      {/* Lightness Slider */}
+      <div style={{ width: 260, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+        <label>Saturation</label>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={lightness}
+          onChange={handleLightnessChange}
+          style={{
+            width: "80%",
+            cursor: "pointer",
+            accentColor: selectedColor,
+            // Remove default appearance for Chrome/Safari
+            WebkitAppearance: "none",
+            height: "12px",
+            borderRadius: "6px",
+            border: `2px solid ${selectedColor}`, // outline
+            backgroundImage: "linear-gradient(to right, #000000, #ffffff)"
+            }}
+        />
+      </div>
+
+      {/* Color Preview */}
       <div
         style={{
           width: 120,
@@ -168,14 +152,10 @@ export default function ColorWheel({ onColorChange }) {
 }
 
 /* ---------- Helpers ---------- */
-
 function hslToRgb(h, s, l) {
-  // h in [0,1], s in [0,1], l in [0,1]
   let r, g, b;
-
-  if (s === 0) {
-    r = g = b = l;
-  } else {
+  if (s === 0) r = g = b = l;
+  else {
     const hue2rgb = (p, q, t) => {
       if (t < 0) t += 1;
       if (t > 1) t -= 1;
@@ -190,18 +170,9 @@ function hslToRgb(h, s, l) {
     g = hue2rgb(p, q, h);
     b = hue2rgb(p, q, h - 1 / 3);
   }
-
   return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
 function rgbToHex(r, g, b) {
-  return (
-    "#" +
-    [r, g, b]
-      .map((n) => {
-        const s = n.toString(16);
-        return s.length === 1 ? "0" + s : s;
-      })
-      .join("")
-  );
+  return "#" + [r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("");
 }
