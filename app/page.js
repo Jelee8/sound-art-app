@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import * as Tone from "tone";
 import ColorWheel from "./components/ColorWheel";
 import P5Sketch from "./components/P5Sketch";
 
@@ -31,6 +32,78 @@ export default function DrawPage() {
   }
     fetchDrawings();
   }, []);
+
+  //define synths
+  const synthsRef = useRef(null);
+    
+  // Initialize synths in useEffect to ensure client-side only
+  useEffect(() => {
+    if (!synthsRef.current) {
+      synthsRef.current = {
+        red: new Tone.PolySynth().toDestination(),
+        yellow: new Tone.PolySynth().toDestination(),
+        green: new Tone.PolySynth().toDestination(),
+        blue: new Tone.PolySynth().toDestination(),
+        indigo: new Tone.PolySynth().toDestination(),
+        purple: new Tone.PolySynth().toDestination(),
+      };
+    }
+    
+    // Cleanup function to dispose synths
+    return () => {
+      if (synthsRef.current) {
+        Object.values(synthsRef.current).forEach(synth => synth.dispose());
+      }
+    };
+  }, []);
+
+  const colorToNote = {
+    red: "C4",
+    yellow: "D4",
+    green: "E4",
+    blue: "G4",
+    indigo: "A4",
+    purple: "B4",
+  };
+
+  function colorToSound(colorHex) {
+    const { h } = hexToHSL(colorHex);
+    if (h < 30) return "red";
+    if (h < 60) return "yellow";
+    if (h < 90) return "green";
+    if (h < 150) return "blue";
+    if (h < 250) return "indigo";
+    return "purple";
+  }
+  function hexToHSL(H) {
+    // Convert hex -> HSL
+    let r = 0, g = 0, b = 0;
+    if (H.length === 4) {
+      r = "0x" + H[1] + H[1];
+      g = "0x" + H[2] + H[2];
+      b = "0x" + H[3] + H[3];
+    } else if (H.length === 7) {
+      r = "0x" + H[1] + H[2];
+      g = "0x" + H[3] + H[4];
+      b = "0x" + H[5] + H[6];
+    }
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    const cmin = Math.min(r, g, b);
+    const cmax = Math.max(r, g, b);
+    const delta = cmax - cmin;
+    let h = 0;
+    if (delta === 0) h = 0;
+    else if (cmax === r) h = ((g - b) / delta) % 6;
+    else if (cmax === g) h = (b - r) / delta + 2;
+    else h = (r - g) / delta + 4;
+    h = Math.round(h * 60);
+    if (h < 0) h += 360;
+    const l = (cmax + cmin) / 2;
+    const s = delta === 0 ? 0 : delta / (1 - Math.abs(2 * l - 1));
+    return { h, s: +(s * 100).toFixed(1), l: +(l * 100).toFixed(1) };
+  }
 
   // Drawing sketch
   const drawingSketch = useCallback((p) => {
@@ -67,26 +140,41 @@ export default function DrawPage() {
           size: size
         };
         strokesRef.current[strokesRef.current.length - 1].push(stroke);
-
+    
         p.stroke(color);
         p.strokeWeight(size);
         p.line(p.pmouseX, p.pmouseY, p.mouseX, p.mouseY);
+    
+        const soundColor = colorToSound(color);
+        const note = colorToNote[soundColor];
+        const synth = synthsRef.current?.[soundColor];
+        if (note && synth) {
+          try {
+            if (Tone.context.state === "running") {
+              synth.triggerAttackRelease(note, "8n");
+            }
+          } catch (err) {
+            console.warn("Tone.js synth error:", err);
+          }
+        }
       }
     };
-
+    
     p.mousePressed = async () => {
-      // Check if mouse is within canvas bounds
+      if (Tone.context.state !== "running") {
+        await Tone.start();
+        console.log("Audio context started");
+      }
       if (p.mouseX >= 0 && p.mouseX <= p.width && p.mouseY >= 0 && p.mouseY <= p.height) {
-        // Starting a new stroke group. Clear redo stack because new action invalidates redo history.
         undosRef.current = [];
         strokesRef.current.push([]);
         drawing = true;
       }
-    }
-
+    };
+    
     p.mouseReleased = async () => {
       drawing = false;
-    }
+    };
 
     p.keyPressed = async () => {
       if (p.key === "s") {
