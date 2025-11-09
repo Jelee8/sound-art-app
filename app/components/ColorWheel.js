@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function ColorWheel({ onColorChange }) {
   const canvasRef = useRef(null);
@@ -10,6 +10,21 @@ export default function ColorWheel({ onColorChange }) {
 
   const CSS_SIZE = 300;
   const INNER_RADIUS_CSS = 80;
+
+  function getColorName(hue) {
+    // Approximate color names based on hue in degrees (0-360)
+    if (hue >= 0 && hue < 15) return "Red";
+    if (hue >= 15 && hue < 45) return "Orange";
+    if (hue >= 45 && hue < 75) return "Yellow";
+    if (hue >= 75 && hue < 150) return "Green";
+    if (hue >= 150 && hue < 195) return "Cyan";
+    if (hue >= 195 && hue < 255) return "Blue";
+    if (hue >= 255 && hue < 285) return "Purple";
+    if (hue >= 285 && hue < 330) return "Magenta";
+    return "Red"; // wrap-around
+  }
+  const [colorName, setColorName] = useState("Red");
+
 
   // Draw color wheel (rainbow ring)
   useEffect(() => {
@@ -52,31 +67,38 @@ export default function ColorWheel({ onColorChange }) {
     const rect = canvas.getBoundingClientRect();
     const cssX = e.clientX - rect.left;
     const cssY = e.clientY - rect.top;
-
+  
     const dpr = window.devicePixelRatio || 1;
     const x = (cssX - CSS_SIZE / 2) * dpr;
     const y = (cssY - CSS_SIZE / 2) * dpr;
     const dist = Math.sqrt(x * x + y * y);
     const innerRadius = INNER_RADIUS_CSS * dpr;
     const outerRadius = (CSS_SIZE / 2) * dpr;
-
+  
     if (dist < innerRadius || dist > outerRadius) return;
-
+  
     const angle = Math.atan2(y, x) * (180 / Math.PI) + 180;
     setSelectedHue(angle);
+  
     const [r, g, b] = hslToRgb(angle / 360, 1, lightness);
     const hex = rgbToHex(r, g, b);
+  
     setSelectedColor(hex);
+    setColorName(getColorName(angle));
     onColorChange?.(hex);
+  
     setMarkerPos({ x: cssX, y: cssY });
   };
-
+  
   const handleLightnessChange = (e) => {
     const newL = parseFloat(e.target.value);
     setLightness(newL);
+  
     const [r, g, b] = hslToRgb(selectedHue / 360, 1, newL);
     const hex = rgbToHex(r, g, b);
+  
     setSelectedColor(hex);
+    setColorName(getColorName(selectedHue));
     onColorChange?.(hex);
   };
 
@@ -146,7 +168,7 @@ export default function ColorWheel({ onColorChange }) {
           backgroundColor: selectedColor,
         }}
       />
-      <div style={{ fontFamily: "monospace" }}>{selectedColor}</div>
+      <div style={{ fontFamily: "monospace" }}>{colorName} - {selectedColor}</div>
     </div>
   );
 }
